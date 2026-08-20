@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Nemotron Tester</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #2a3038;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #76b900; /* nvidia green */
+    --accent-dim: #4d7a00;
+    --user-bubble: #1f6feb22;
+    --error: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    gap: 8px;
+  }
+  header h1 {
+    font-size: 15px;
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.ok { background: var(--accent); }
+  .dot.err { background: var(--error); }
+  .iconBtn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .headerBtns { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* Sidebar (sessions) */
+  #app { flex: 1; display: flex; min-height: 0; position: relative; }
+  #sidebar {
+    width: 260px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    z-index: 20;
+  }
+  #sidebar.open { transform: translateX(0); }
+  #sidebarHeader {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  #newChatBtn {
+    width: 100%;
+    background: var(--accent);
+    color: #0d1117;
+    border: none;
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  #sessionList {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px;
+  }
+  .sessionItem {
+    padding: 10px 10px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    color: var(--text);
+    margin-bottom: 2px;
+  }
+  .sessionItem:hover { background: #ffffff0a; }
+  .sessionItem.active { background: #ffffff14; }
+  .sessionItem .title {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;
+  }
+  .sessionItem .del {
+    color: var(--muted);
+    font-size: 14px;
+    padding: 2px 6px;
+    flex-shrink: 0;
+  }
+  .sessionItem .del:hover { color: var(--error); }
+  #overlay {
+    display: none;
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #00000066;
+    z-index: 15;
+  }
+  #overlay.open { display: block; }
+
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  #settingsPanel {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--panel);
+    overflow-y: auto;
+    max-height: 60vh;
+  }
+  #settingsPanel.open { display: flex; }
+  #settingsPanel label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  #settingsPanel input, #settingsPanel textarea, #settingsPanel select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg {
+    max-width: 85%;
+    padding: 10px 13px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--user-bubble);
+    border: 1px solid #1f6feb44;
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--panel);
+    border: 1px solid var(--border);
+  }
+  .msg.system-note {
+    align-self: center;
+    color: var(--muted);
+    font-size: 12px;
+    background: none;
+    text-align: center;
+  }
+  .msg.error {
+    align-self: flex-start;
+    background: #f8514922;
+    border: 1px solid var(--error);
+    color: #ffb4ae;
+    font-size: 13px;
+  }
+  .msg.error strong { color: var(--error); }
+  #inputBar {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #userInput {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    resize: none;
+    max-height: 120px;
+  }
+  #sendBtn {
+    background: var(--accent);
+    color: #0d1117;
+    border: none;
+    border-radius: 10px;
+    padding: 0 18px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #sendBtn:disabled { background: var(--accent-dim); color: #ffffff88; }
+  .typing {
+    display: inline-flex; gap: 3px; align-items: center;
+  }
+  .typing span {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex; align-items:center; gap:8px; overflow:hidden;">
+    <button class="iconBtn" id="menuBtn">☰</button>
+    <h1><span class="dot" id="statusDot"></span> <span id="headerTitle">Nemotron Tester</span></h1>
+  </div>
+  <div class="headerBtns">
+    <button class="iconBtn" id="settingsBtn">Settings</button>
+  </div>
+</header>
+
+<div id="app">
+  <div id="overlay"></div>
+  <div id="sidebar">
+    <div id="sidebarHeader">
+      <button id="newChatBtn">+ New Chat</button>
+    </div>
+    <div id="sessionList"></div>
+  </div>
+
+  <div id="main">
+    <div id="settingsPanel">
+      <div>
+        <label>NVIDIA API Key</label>
+        <input type="password" id="apiKey" placeholder="nvapi-...">
+        <div class="hint">Saved locally in this browser only. Never leaves your device except in requests to your own proxy.</div>
+      </div>
+      <div>
+        <label>Model</label>
+        <select id="modelSelect">
+          <option value="mistralai/mistral-nemotron">mistralai/mistral-nemotron</option>
+          <option value="nvidia/llama-3.1-nemotron-70b-instruct">nvidia/llama-3.1-nemotron-70b-instruct</option>
+          <option value="nvidia/llama-3.1-nemotron-51b-instruct">nvidia/llama-3.1-nemotron-51b-instruct</option>
+          <option value="meta/llama-3.1-8b-instruct">meta/llama-3.1-8b-instruct</option>
+          <option value="meta/llama-3.1-70b-instruct">meta/llama-3.1-70b-instruct</option>
+          <option value="meta/llama-3.3-70b-instruct">meta/llama-3.3-70b-instruct</option>
+          <option value="deepseek-ai/deepseek-r1">deepseek-ai/deepseek-r1</option>
+          <option value="qwen/qwen2.5-coder-32b-instruct">qwen/qwen2.5-coder-32b-instruct</option>
+          <option value="mistralai/mixtral-8x22b-instruct-v0.1">mistralai/mixtral-8x22b-instruct-v0.1</option>
+          <option value="__custom__">Custom (type below)…</option>
+        </select>
+        <input type="text" id="modelCustom" placeholder="e.g. org/model-name" style="margin-top:6px; display:none;">
+        <div class="hint">Any model id available on build.nvidia.com works here — pick from the list or type your own.</div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Max tokens</label>
+          <input type="number" id="maxTokens" value="4096">
+        </div>
+        <div>
+          <label>Temperature</label>
+          <input type="number" id="temp" value="0.6" step="0.1">
+        </div>
+        <div>
+          <label>Top P</label>
+          <input type="number" id="topP" value="0.7" step="0.1">
+        </div>
+      </div>
+      <div>
+        <label>System prompt (optional)</label>
+        <textarea id="systemPrompt" rows="2" placeholder="e.g. You are a concise coding assistant."></textarea>
+      </div>
+      <button class="iconBtn" id="clearAllBtn" style="align-self:flex-start; color:var(--error); border-color:var(--error);">Clear all saved data</button>
+    </div>
+
+    <div id="chat"></div>
+
+    <div id="inputBar">
+      <textarea id="userInput" rows="1" placeholder="Message..."></textarea>
+      <button id="sendBtn">Send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Storage layer ----------
+const STORE_KEY = 'nemotron_tester_v1';
+
+function loadStore() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function saveStore() {
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+  } catch (e) {
+    console.error('Failed to save to localStorage', e);
+  }
+}
+
+function newSession() {
+  return {
+    id: 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    title: 'New Chat',
+    messages: [], // {role, content}
+    createdAt: Date.now()
+  };
+}
+
+let store = loadStore();
+if (!store) {
+  const s = newSession();
+  store = {
+    settings: {
+      apiKey: '',
+      model: 'mistralai/mistral-nemotron',
+      maxTokens: 4096,
+      temp: 0.6,
+      topP: 0.7,
+      systemPrompt: ''
+    },
+    sessions: [s],
+    activeId: s.id
+  };
+  saveStore();
+}
+// migrate: ensure at least one session exists
+if (!store.sessions || store.sessions.length === 0) {
+  const s = newSession();
+  store.sessions = [s];
+  store.activeId = s.id;
+  saveStore();
+}
+
+function getActiveSession() {
+  return store.sessions.find(s => s.id === store.activeId) || store.sessions[0];
+}
+
+// ---------- DOM refs ----------
+const chat = document.getElementById('chat');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const statusDot = document.getElementById('statusDot');
+const headerTitle = document.getElementById('headerTitle');
+const menuBtn = document.getElementById('menuBtn');
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const sessionList = document.getElementById('sessionList');
+const newChatBtn = document.getElementById('newChatBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
+
+const apiKeyEl = document.getElementById('apiKey');
+const modelSelectEl = document.getElementById('modelSelect');
+const modelCustomEl = document.getElementById('modelCustom');
+const maxTokensEl = document.getElementById('maxTokens');
+const tempEl = document.getElementById('temp');
+const topPEl = document.getElementById('topP');
+const systemPromptEl = document.getElementById('systemPrompt');
+
+// ---------- Settings UI <-> store ----------
+function applySettingsToUI() {
+  const s = store.settings;
+  apiKeyEl.value = s.apiKey || '';
+  maxTokensEl.value = s.maxTokens;
+  tempEl.value = s.temp;
+  topPEl.value = s.topP;
+  systemPromptEl.value = s.systemPrompt || '';
+
+  const known = Array.from(modelSelectEl.options).map(o => o.value);
+  if (known.includes(s.model)) {
+    modelSelectEl.value = s.model;
+    modelCustomEl.style.display = 'none';
+  } else {
+    modelSelectEl.value = '__custom__';
+    modelCustomEl.style.display = 'block';
+    modelCustomEl.value = s.model;
+  }
+}
+
+function currentModel() {
+  return modelSelectEl.value === '__custom__' ? modelCustomEl.value.trim() : modelSelectEl.value;
+}
+
+function persistSettingsFromUI() {
+  store.settings = {
+    apiKey: apiKeyEl.value.trim(),
+    model: currentModel(),
+    maxTokens: parseInt(maxTokensEl.value, 10) || 4096,
+    temp: parseFloat(tempEl.value),
+    topP: parseFloat(topPEl.value),
+    systemPrompt: systemPromptEl.value.trim()
+  };
+  saveStore();
+}
+
+[apiKeyEl, maxTokensEl, tempEl, topPEl, systemPromptEl, modelCustomEl].forEach(el => {
+  el.addEventListener('change', persistSettingsFromUI);
+  el.addEventListener('blur', persistSettingsFromUI);
+});
+modelSelectEl.addEventListener('change', () => {
+  modelCustomEl.style.display = modelSelectEl.value === '__custom__' ? 'block' : 'none';
+  persistSettingsFromUI();
+});
+
+applySettingsToUI();
+
+// ---------- Sidebar / sessions ----------
+function renderSessionList() {
+  sessionList.innerHTML = '';
+  const sorted = [...store.sessions].sort((a, b) => b.createdAt - a.createdAt);
+  sorted.forEach(s => {
+    const item = document.createElement('div');
+    item.className = 'sessionItem' + (s.id === store.activeId ? ' active' : '');
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'title';
+    titleSpan.textContent = s.title || 'New Chat';
+    const delBtn = document.createElement('span');
+    delBtn.className = 'del';
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteSession(s.id);
+    });
+    item.appendChild(titleSpan);
+    item.appendChild(delBtn);
+    item.addEventListener('click', () => switchSession(s.id));
+    sessionList.appendChild(item);
+  });
+}
+
+function switchSession(id) {
+  store.activeId = id;
+  saveStore();
+  renderSessionList();
+  renderChat();
+  closeSidebar();
+}
+
+function deleteSession(id) {
+  if (!confirm('Delete this chat? This cannot be undone.')) return;
+  store.sessions = store.sessions.filter(s => s.id !== id);
+  if (store.sessions.length === 0) {
+    store.sessions = [newSession()];
+  }
+  if (store.activeId === id) {
+    store.activeId = store.sessions[0].id;
+  }
+  saveStore();
+  renderSessionList();
+  renderChat();
+}
+
+newChatBtn.addEventListener('click', () => {
+  const s = newSession();
+  store.sessions.push(s);
+  store.activeId = s.id;
+  saveStore();
+  renderSessionList();
+  renderChat();
+  closeSidebar();
+});
+
+function openSidebar() { sidebar.classList.add('open'); overlay.classList.add('open'); }
+function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('open'); }
+menuBtn.addEventListener('click', () => {
+  sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+});
+overlay.addEventListener('click', closeSidebar);
+
+clearAllBtn.addEventListener('click', () => {
+  if (!confirm('This deletes your API key, settings, and ALL saved chats from this browser. Continue?')) return;
+  localStorage.removeItem(STORE_KEY);
+  location.reload();
+});
+
+// ---------- Chat rendering ----------
+function renderChat() {
+  chat.innerHTML = '';
+  const session = getActiveSession();
+  headerTitle.textContent = session.title || 'New Chat';
+  if (session.messages.length === 0) {
+    addSystemNote('Paste your API key in Settings (saved automatically), then say hi.');
+    return;
+  }
+  session.messages.forEach(m => {
+    addMsg(m.role, m.content, false);
+  });
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addSystemNote(text) {
+  const div = document.createElement('div');
+  div.className = 'msg system-note';
+  div.textContent = text;
+  chat.appendChild(div);
+}
+
+function addMsg(role, text, scroll = true) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  chat.appendChild(div);
+  if (scroll) chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function addError(title, detail) {
+  const div = document.createElement('div');
+  div.className = 'msg error';
+  div.innerHTML = '<strong>' + title + '</strong><br>' + detail;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// ---------- Settings panel toggle ----------
+settingsBtn.addEventListener('click', () => {
+  settingsPanel.classList.toggle('open');
+});
+
+// ---------- Input handling ----------
+userInput.addEventListener('input', () => {
+  userInput.style.height = 'auto';
+  userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
+});
+
+userInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+
+sendBtn.addEventListener('click', send);
+
+async function send() {
+  const text = userInput.value.trim();
+  const apiKey = apiKeyEl.value.trim();
+  if (!text) return;
+  if (!apiKey) {
+    addError('No API key', 'Paste your NVIDIA API key into Settings first.');
+    return;
+  }
+
+  const session = getActiveSession();
+
+  // clear the placeholder note on first message
+  if (session.messages.length === 0) {
+    chat.innerHTML = '';
+  }
+
+  addMsg('user', text);
+  session.messages.push({ role: 'user', content: text });
+
+  // auto-title the session from the first message
+  if (session.messages.length === 1) {
+    session.title = text.slice(0, 40) + (text.length > 40 ? '…' : '');
+    headerTitle.textContent = session.title;
+    renderSessionList();
+  }
+
+  saveStore();
+
+  userInput.value = '';
+  userInput.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  const typingDiv = addMsg('assistant', '');
+  typingDiv.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+
+  const model = currentModel();
+  const maxTokens = parseInt(maxTokensEl.value, 10) || 4096;
+  const temp = parseFloat(tempEl.value);
+  const topP = parseFloat(topPEl.value);
+  const systemPrompt = systemPromptEl.value.trim();
+
+  const messages = systemPrompt
+    ? [{ role: 'system', content: systemPrompt }, ...session.messages]
+    : [...session.messages];
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: temp,
+        top_p: topP,
+        max_tokens: maxTokens,
+        stream: false
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      typingDiv.remove();
+      addError('Request failed (' + res.status + ')', escapeHtml(errText.slice(0, 500)));
+      statusDot.className = 'dot err';
+      sendBtn.disabled = false;
+      session.messages.pop();
+      saveStore();
+      return;
+    }
+
+    const data = await res.json();
+    const reply = data.choices?.[0]?.message?.content ?? '(empty response)';
+    typingDiv.textContent = reply;
+    session.messages.push({ role: 'assistant', content: reply });
+    saveStore();
+    statusDot.className = 'dot ok';
+
+  } catch (err) {
+    typingDiv.remove();
+    const isCORS = err instanceof TypeError;
+    if (isCORS) {
+      addError(
+        'Could not reach /api/chat',
+        'This means the Pages Function proxy isn\'t live yet — check that the Cloudflare Pages deploy succeeded and that this page is being served from your workers.dev / pages.dev URL (not opened as a local file).'
+      );
+    } else {
+      addError('Unexpected error', escapeHtml(String(err)));
+    }
+    statusDot.className = 'dot err';
+    session.messages.pop();
+    saveStore();
+  }
+
+  sendBtn.disabled = false;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ---------- Init ----------
+renderSessionList();
+renderChat();
+</script>
+
+</body>
+</html>
