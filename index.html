@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Nemotron Tester</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #2a3038;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --accent: #76b900; /* nvidia green */
+    --accent-dim: #4d7a00;
+    --user-bubble: #1f6feb22;
+    --error: #f85149;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+  header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 15px;
+    margin: 0;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.ok { background: var(--accent); }
+  .dot.err { background: var(--error); }
+  #settingsBtn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  #settingsPanel {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--panel);
+  }
+  #settingsPanel.open { display: flex; }
+  #settingsPanel label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 4px; }
+  #settingsPanel input, #settingsPanel textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; }
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .msg {
+    max-width: 85%;
+    padding: 10px 13px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--user-bubble);
+    border: 1px solid #1f6feb44;
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--panel);
+    border: 1px solid var(--border);
+  }
+  .msg.system-note {
+    align-self: center;
+    color: var(--muted);
+    font-size: 12px;
+    background: none;
+    text-align: center;
+  }
+  .msg.error {
+    align-self: flex-start;
+    background: #f8514922;
+    border: 1px solid var(--error);
+    color: #ffb4ae;
+    font-size: 13px;
+  }
+  .msg.error strong { color: var(--error); }
+  #inputBar {
+    display: flex;
+    gap: 8px;
+    padding: 12px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #userInput {
+    flex: 1;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    resize: none;
+    max-height: 120px;
+  }
+  #sendBtn {
+    background: var(--accent);
+    color: #0d1117;
+    border: none;
+    border-radius: 10px;
+    padding: 0 18px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #sendBtn:disabled { background: var(--accent-dim); color: #ffffff88; }
+  .typing {
+    display: inline-flex; gap: 3px; align-items: center;
+  }
+  .typing span {
+    width: 5px; height: 5px; border-radius: 50%; background: var(--muted);
+    animation: blink 1.2s infinite ease-in-out;
+  }
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.2; } 40% { opacity: 1; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span class="dot" id="statusDot"></span> Nemotron Tester</h1>
+  <button id="settingsBtn">Settings</button>
+</header>
+
+<div id="settingsPanel">
+  <div>
+    <label>NVIDIA API Key</label>
+    <input type="password" id="apiKey" placeholder="nvapi-...">
+  </div>
+  <div class="row">
+    <div>
+      <label>Model</label>
+      <input type="text" id="model" value="mistralai/mistral-nemotron">
+    </div>
+    <div>
+      <label>Max tokens</label>
+      <input type="number" id="maxTokens" value="4096">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Temperature</label>
+      <input type="number" id="temp" value="0.6" step="0.1">
+    </div>
+    <div>
+      <label>Top P</label>
+      <input type="number" id="topP" value="0.7" step="0.1">
+    </div>
+  </div>
+  <div>
+    <label>System prompt (optional)</label>
+    <textarea id="systemPrompt" rows="2" placeholder="e.g. You are a concise coding assistant."></textarea>
+  </div>
+</div>
+
+<div id="chat">
+  <div class="msg system-note">Paste your API key in Settings, then say hi.</div>
+</div>
+
+<div id="inputBar">
+  <textarea id="userInput" rows="1" placeholder="Message..."></textarea>
+  <button id="sendBtn">Send</button>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const userInput = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsPanel = document.getElementById('settingsPanel');
+const statusDot = document.getElementById('statusDot');
+
+let history = [];
+
+settingsBtn.addEventListener('click', () => {
+  settingsPanel.classList.toggle('open');
+});
+
+userInput.addEventListener('input', () => {
+  userInput.style.height = 'auto';
+  userInput.style.height = Math.min(userInput.scrollHeight, 120) + 'px';
+});
+
+userInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+
+sendBtn.addEventListener('click', send);
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function addError(title, detail) {
+  const div = document.createElement('div');
+  div.className = 'msg error';
+  div.innerHTML = '<strong>' + title + '</strong><br>' + detail;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function send() {
+  const text = userInput.value.trim();
+  const apiKey = document.getElementById('apiKey').value.trim();
+  if (!text) return;
+  if (!apiKey) {
+    addError('No API key', 'Paste your NVIDIA API key into Settings first.');
+    return;
+  }
+
+  addMsg('user', text);
+  history.push({ role: 'user', content: text });
+  userInput.value = '';
+  userInput.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  const typingDiv = addMsg('assistant', '');
+  typingDiv.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
+
+  const model = document.getElementById('model').value.trim();
+  const maxTokens = parseInt(document.getElementById('maxTokens').value, 10) || 4096;
+  const temp = parseFloat(document.getElementById('temp').value);
+  const topP = parseFloat(document.getElementById('topP').value);
+  const systemPrompt = document.getElementById('systemPrompt').value.trim();
+
+  const messages = systemPrompt
+    ? [{ role: 'system', content: systemPrompt }, ...history]
+    : [...history];
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: temp,
+        top_p: topP,
+        max_tokens: maxTokens,
+        stream: false
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      typingDiv.remove();
+      addError('Request failed (' + res.status + ')', escapeHtml(errText.slice(0, 500)));
+      statusDot.className = 'dot err';
+      sendBtn.disabled = false;
+      history.pop();
+      return;
+    }
+
+    const data = await res.json();
+    const reply = data.choices?.[0]?.message?.content ?? '(empty response)';
+    typingDiv.textContent = reply;
+    history.push({ role: 'assistant', content: reply });
+    statusDot.className = 'dot ok';
+
+  } catch (err) {
+    typingDiv.remove();
+    const isCORS = err instanceof TypeError;
+    if (isCORS) {
+      addError(
+        'Could not reach /api/chat',
+        'This means the Pages Function proxy isn\'t live yet — check that the Cloudflare Pages deploy succeeded and that this page is being served from your workers.dev / pages.dev URL (not opened as a local file).'
+      );
+    } else {
+      addError('Unexpected error', escapeHtml(String(err)));
+    }
+    statusDot.className = 'dot err';
+    history.pop();
+  }
+
+  sendBtn.disabled = false;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
